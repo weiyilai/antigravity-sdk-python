@@ -14,6 +14,7 @@
 
 """Tests for Agent API."""
 
+import contextlib
 import os
 import unittest
 from unittest import mock
@@ -862,6 +863,38 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
     async with agent.Agent(config) as ag:
       conn = ag.connection
       self.assertEqual(conn, mock_conversation._connection)
+
+  async def test_agent_aexit_passes_exceptions(self):
+    config = local_connection.LocalAgentConfig(system_instructions="test")
+    ag = agent.Agent(config)
+
+    mock_exit_stack = mock.AsyncMock(spec=contextlib.AsyncExitStack)
+    ag._exit_stack = mock_exit_stack
+
+    # Simulate entering the context
+    ag._conversation = mock.MagicMock()
+
+    exc = ValueError("test exception")
+    await ag.__aexit__(ValueError, exc, None)
+
+    mock_exit_stack.__aexit__.assert_called_once_with(ValueError, exc, None)
+
+  async def test_agent_aexit_returns_suppression_status(self):
+    config = local_connection.LocalAgentConfig(system_instructions="test")
+    ag = agent.Agent(config)
+
+    mock_exit_stack = mock.AsyncMock(spec=contextlib.AsyncExitStack)
+    mock_exit_stack.__aexit__.return_value = True
+    ag._exit_stack = mock_exit_stack
+
+    # Simulate entering the context
+    ag._conversation = mock.MagicMock()
+
+    exc = ValueError("test exception")
+    suppressed = await ag.__aexit__(ValueError, exc, None)
+
+    self.assertTrue(suppressed)
+    mock_exit_stack.__aexit__.assert_called_once_with(ValueError, exc, None)
 
 
 class AgentConfigTest(unittest.TestCase):

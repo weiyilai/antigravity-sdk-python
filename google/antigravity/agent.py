@@ -15,6 +15,7 @@
 """Layer 1 API for Antigravity SDK."""
 
 import asyncio
+import contextlib
 import logging
 
 from google.antigravity import types
@@ -52,6 +53,7 @@ class Agent:
     self._mcp_bridge = None
     self._pending_hooks = list(config.hooks)
     self._pending_triggers = list(config.triggers)
+    self._exit_stack = contextlib.AsyncExitStack()
 
   def register_hook(self, hook: hooks.Hook):
     """Registers a hook by inferring its type.
@@ -132,6 +134,8 @@ class Agent:
       if self._config.mcp_servers:
         logging.info("Connecting to MCP servers...")
         self._mcp_bridge = bridge.McpBridge()
+        self._exit_stack.push_async_callback(self._mcp_bridge.stop)
+
         for server_cfg in self._config.mcp_servers:
           await self._mcp_bridge.connect(server_cfg)
         all_tools.extend(self._mcp_bridge.tools)
@@ -144,17 +148,19 @@ class Agent:
       )
 
       logging.info("Starting connection and creating conversation...")
-      self._conversation_cm = conversation.Conversation.create(self._strategy)
-      self._conversation = await self._conversation_cm.__aenter__()
+      self._conversation = await self._exit_stack.enter_async_context(
+          conversation.Conversation.create(self._strategy)
+      )
 
       # Start triggers via TriggerRunner.
       if self._pending_triggers:
         logging.info("Starting triggers...")
-        self._trigger_runner = trigger_runner.TriggerRunner(
-            triggers=list(self._pending_triggers),
-            connection=self._conversation._connection,
+        self._trigger_runner = await self._exit_stack.enter_async_context(
+            trigger_runner.TriggerRunner(
+                triggers=list(self._pending_triggers),
+                connection=self._conversation._connection,
+            )
         )
-        await self._trigger_runner.start()
         self._pending_triggers.clear()
 
       # Wire ToolContext into ToolRunner so tools can access
@@ -166,7 +172,7 @@ class Agent:
       return self
     except Exception:
       logging.exception("Failed to start Agent session, cleaning up...")
-      await self.__aexit__(None, None, None)
+      await self._exit_stack.aclose()
       raise
 
   async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -178,13 +184,7 @@ class Agent:
         exc_tb: The traceback, if any.
     """
     logging.info("Stopping Agent session")
-    if self._trigger_runner:
-      await self._trigger_runner.stop()
-      self._trigger_runner = None
-    if self._mcp_bridge:
-      await self._mcp_bridge.stop()
-    if self._conversation_cm:
-      await self._conversation_cm.__aexit__(exc_type, exc_val, exc_tb)
+    return await self._exit_stack.__aexit__(exc_type, exc_val, exc_tb)
 
   async def chat(self, prompt: types.Content) -> types.ChatResponse:
     """Sends a prompt and returns the final response.
