@@ -46,6 +46,7 @@ class LocalAgentConfig(connection.AgentConfig):
   policies: list[Any] = pydantic.Field(
       default_factory=policy.confirm_run_command
   )
+  workspaces: list[str] = pydantic.Field(default_factory=lambda: [os.getcwd()])
 
   gemini_config: types.GeminiConfig = pydantic.Field(
       default_factory=types.GeminiConfig

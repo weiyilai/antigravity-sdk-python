@@ -146,6 +146,7 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
         system_instructions="test",
         capabilities=types.CapabilitiesConfig(),
         policies=[],
+        workspaces=[],
     )
     with self.assertRaises(ValueError):
       async with agent.Agent(config):
@@ -168,6 +169,7 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
             enabled_tools=[types.BuiltinTools.RUN_COMMAND],
         ),
         policies=[],
+        workspaces=[],
     )
     with self.assertRaises(ValueError):
       async with agent.Agent(config):
@@ -190,6 +192,7 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
             enabled_tools=list(types.BuiltinTools),
         ),
         policies=[],
+        workspaces=[],
     )
     with self.assertRaises(ValueError):
       async with agent.Agent(config):
@@ -210,6 +213,7 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
         system_instructions="test",
         capabilities=types.CapabilitiesConfig(disabled_tools=[]),
         policies=[],
+        workspaces=[],
     )
     with self.assertRaises(ValueError):
       async with agent.Agent(config):
@@ -271,6 +275,7 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
             {"type": "stdio", "command": "node", "args": ["index.js"]}
         ],
         policies=[],
+        workspaces=[],
     )
     with self.assertRaises(ValueError):
       async with agent.Agent(config):
@@ -892,12 +897,15 @@ class AgentConfigTest(unittest.TestCase):
     """Verifies AgentConfig defaults: safe policies, default model."""
     config = local_connection.LocalAgentConfig(system_instructions="test")
     self.assertIsNone(config.capabilities.enabled_tools)
-    # Default is confirm_run_command(): deny(run_command) + allow(*).
-    self.assertEqual(len(config.policies), 2)
-    self.assertEqual(config.policies[0].tool, "run_command")
-    self.assertEqual(config.policies[0].decision, policy.Decision.DENY)
-    self.assertEqual(config.policies[1].tool, "*")
-    self.assertEqual(config.policies[1].decision, policy.Decision.APPROVE)
+    self.assertIsNone(config.capabilities.disabled_tools)
+    # Default includes 3 workspace_only policies (CWD) + 2
+    # confirm_run_command policies.
+    self.assertEqual(len(config.policies), 5)
+    for i in range(3):
+      self.assertEqual(config.policies[i].decision, policy.Decision.DENY)
+      self.assertEqual(config.policies[i].name, "workspace_only")
+    self.assertEqual(config.policies[3].tool, "run_command")
+    self.assertEqual(config.policies[4].tool, "*")
     self.assertEqual(
         config.gemini_config.models.default.name, types.DEFAULT_MODEL
     )

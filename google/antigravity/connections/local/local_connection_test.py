@@ -19,6 +19,7 @@ import datetime
 import importlib
 import io
 import json
+import os
 import struct
 import subprocess
 import unittest
@@ -3305,6 +3306,7 @@ class LocalAgentConfigTest(unittest.TestCase):
     """LocalAgentConfig defaults to confirm_run_command() — deny run_command."""
     config = local_connection_config.LocalAgentConfig(
         system_instructions="test",
+        workspaces=[],
     )
     self.assertIsNone(config.capabilities.enabled_tools)
     self.assertIsNone(config.capabilities.disabled_tools)
@@ -3317,6 +3319,21 @@ class LocalAgentConfigTest(unittest.TestCase):
     allow_policy = config.policies[1]
     self.assertEqual(allow_policy.tool, "*")
     self.assertEqual(allow_policy.decision, policy.Decision.APPROVE)
+
+  def test_safe_defaults_with_default_workspace(self):
+    """LocalAgentConfig defaults to CWD workspace when not specified."""
+    config = local_connection_config.LocalAgentConfig(
+        system_instructions="test",
+    )
+    self.assertEqual(config.workspaces, [os.getcwd()])
+    # workspace_only produces 3 deny policies (view_file, create_file,
+    # edit_file), followed by the 2 confirm_run_command policies.
+    self.assertEqual(len(config.policies), 5)
+    for i in range(3):
+      self.assertEqual(config.policies[i].decision, policy.Decision.DENY)
+      self.assertEqual(config.policies[i].name, "workspace_only")
+    self.assertEqual(config.policies[3].tool, "run_command")
+    self.assertEqual(config.policies[4].tool, "*")
 
   def test_workspace_policies_auto_prepended(self):
     """workspace_only() policies are auto-prepended when workspaces are set."""
@@ -3340,6 +3357,7 @@ class LocalAgentConfigTest(unittest.TestCase):
     config = local_connection_config.LocalAgentConfig(
         system_instructions="test",
         policies=[policy.allow_all()],
+        workspaces=[],
     )
     self.assertEqual(len(config.policies), 1)
     self.assertEqual(config.policies[0].tool, "*")
