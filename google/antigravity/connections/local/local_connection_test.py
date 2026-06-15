@@ -137,6 +137,53 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
       async for _ in harness.conn.receive_steps():
         pass
 
+  async def test_receive_steps_system_error_429(self):
+    harness = self._make_harness()
+    mock_trajectory_id = "my_cascade"
+
+    await harness.conn.send("Hello")
+    init_data = await harness.wait_for_response()
+    self.assertEqual(init_data.get("userInput"), "Hello")
+
+    # Set the cascade ID and send the 429 error step.
+    event1 = localharness_pb2.OutputEvent(
+        step_update=localharness_pb2.StepUpdate(
+            cascade_id=mock_trajectory_id,
+            trajectory_id=mock_trajectory_id,
+            step_index=1,
+            error=localharness_pb2.ActionError(
+                error_message="Resource exhausted",
+                http_code=429,
+            ),
+            state=localharness_pb2.StepUpdate.STATE_ERROR,
+            source=localharness_pb2.StepUpdate.SOURCE_SYSTEM,
+        )
+    )
+    await harness.send_event(event1)
+
+    # Send idle update with error.
+    event2 = localharness_pb2.OutputEvent(
+        trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
+            trajectory_id=mock_trajectory_id,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            error="executor run failed: Resource exhausted",
+        )
+    )
+    await harness.send_event(event2)
+    await harness.close_from_harness_side()
+
+    steps = []
+    with self.assertRaisesRegex(
+        types.AntigravityExecutionError,
+        "executor run failed: Resource exhausted",
+    ):
+      async for step in harness.conn.receive_steps():
+        steps.append(step)
+
+    self.assertEqual(len(steps), 1)
+    self.assertEqual(steps[0].error, "Resource exhausted")
+    self.assertEqual(steps[0].status, types.StepStatus.ERROR)
+
   async def test_receive_steps_trajectory_error(self):
     harness = self._make_harness()
 
