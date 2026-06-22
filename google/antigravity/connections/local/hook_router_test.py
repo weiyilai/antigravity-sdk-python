@@ -15,6 +15,7 @@
 """Unit tests for HookRouter."""
 
 import asyncio
+from typing import Any
 from absl.testing import absltest
 from google.antigravity.connections.local import localharness_pb2
 from google.antigravity.connections.local.hook_router import HookRouter
@@ -121,6 +122,111 @@ class HookRouterTest(absltest.TestCase):
       self.assertTrue(sent_events[0].HasField("call_hook_response"))
       resp = sent_events[0].call_hook_response
       self.assertEqual(resp.request_id, "test_req_unknown")
+      self.assertTrue(resp.HasField("empty_result"))
+
+    asyncio.run(_test())
+
+  def test_handle_pre_turn_allow(self):
+
+    async def _test():
+      fired = asyncio.Event()
+
+      @hooks.pre_turn
+      async def my_hook(prompt: Any):
+        fired.set()
+        return hooks.HookResult(allow=True)
+
+      hook_runner = h_runner.HookRunner(pre_turn_hooks=[my_hook])
+      sent_events = []
+
+      async def mock_send(event: localharness_pb2.InputEvent):
+        sent_events.append(event)
+
+      router = HookRouter(hook_runner, mock_send)
+      req = localharness_pb2.CallHookRequest(
+          request_id="test_pre_turn",
+          name="PreTurn",
+          type=localharness_pb2.LIFECYCLE_HOOK_PRE_TURN,
+      )
+
+      await router.handle(req)
+
+      self.assertTrue(fired.is_set())
+      self.assertLen(sent_events, 1)
+      resp = sent_events[0].call_hook_response
+      self.assertEqual(resp.request_id, "test_pre_turn")
+      self.assertTrue(resp.HasField("pre_turn_result"))
+      self.assertEqual(
+          resp.pre_turn_result.decision,
+          localharness_pb2.PreTurnResult.Decision.ALLOW,
+      )
+
+    asyncio.run(_test())
+
+  def test_handle_pre_turn_multipart_content(self):
+
+    async def _test():
+      captured_input = []
+
+      @hooks.pre_turn
+      async def my_hook(prompt: Any):
+        captured_input.append(prompt)
+        return hooks.HookResult(allow=True)
+
+      hook_runner = h_runner.HookRunner(pre_turn_hooks=[my_hook])
+      router = HookRouter(hook_runner, lambda _: asyncio.sleep(0))
+      req = localharness_pb2.CallHookRequest(
+          request_id="test_multi",
+          type=localharness_pb2.LIFECYCLE_HOOK_PRE_TURN,
+          pre_turn_args=localharness_pb2.PreTurnArgs(
+              user_input=localharness_pb2.UserInput(
+                  parts=[
+                      localharness_pb2.UserInput.Part(text="hello"),
+                      localharness_pb2.UserInput.Part(text="world"),
+                  ]
+              )
+          ),
+      )
+
+      await router.handle(req)
+
+      self.assertLen(captured_input, 1)
+      self.assertEqual(captured_input[0], ["hello", "world"])
+
+    asyncio.run(_test())
+
+  def test_handle_post_turn(self):
+
+    async def _test():
+      fired = asyncio.Event()
+      received_data = []
+
+      @hooks.post_turn
+      async def my_hook(data: str):
+        fired.set()
+        received_data.append(data)
+
+      hook_runner = h_runner.HookRunner(post_turn_hooks=[my_hook])
+      sent_events = []
+
+      async def mock_send(event: localharness_pb2.InputEvent):
+        sent_events.append(event)
+
+      router = HookRouter(hook_runner, mock_send)
+      req = localharness_pb2.CallHookRequest(
+          request_id="test_post_turn",
+          name="PostTurn",
+          type=localharness_pb2.LIFECYCLE_HOOK_POST_TURN,
+          post_turn_args=localharness_pb2.PostTurnArgs(response_text="final"),
+      )
+
+      await router.handle(req)
+
+      self.assertTrue(fired.is_set())
+      self.assertEqual(received_data, ["final"])
+      self.assertLen(sent_events, 1)
+      resp = sent_events[0].call_hook_response
+      self.assertEqual(resp.request_id, "test_post_turn")
       self.assertTrue(resp.HasField("empty_result"))
 
     asyncio.run(_test())

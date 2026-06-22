@@ -418,14 +418,37 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     )
 
     await harness.conn.send("Hello")
+    await harness.send_event(
+        localharness_pb2.OutputEvent(
+            call_hook_request=localharness_pb2.CallHookRequest(
+                request_id="req_deny",
+                name="PreTurn",
+                type=localharness_pb2.LIFECYCLE_HOOK_PRE_TURN,
+                pre_turn_args=localharness_pb2.PreTurnArgs(
+                    user_input=localharness_pb2.UserInput(
+                        parts=[localharness_pb2.UserInput.Part(text="Hello")]
+                    )
+                ),
+            )
+        )
+    )
 
-    steps = []
-    async for step in harness.conn.receive_steps():
-      steps.append(step)
+    # The harness emits STATE_CANCELLED when the PreTurn hook denies.
+    await harness.send_event(
+        localharness_pb2.OutputEvent(
+            trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
+                trajectory_id="test",
+                state=localharness_pb2.TrajectoryStateUpdate.State.STATE_CANCELLED,
+                error="Denied by hook",
+            )
+        )
+    )
 
-    self.assertEqual(len(steps), 1)
-    self.assertEqual(steps[0].status, types.StepStatus.CANCELED)
-    self.assertEqual(steps[0].error, "Denied by hook")
+    with self.assertRaises(types.AntigravityExecutionError) as ctx:
+      async for _ in harness.conn.receive_steps():
+        pass
+
+    self.assertIn("Denied by hook", str(ctx.exception))
 
   async def test_send_none_dispatches_turn_hook_with_empty_string(self):
     hr = hook_runner.HookRunner()
@@ -446,6 +469,21 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     )
 
     await harness.conn.send(None)
+    await harness.send_event(
+        localharness_pb2.OutputEvent(
+            call_hook_request=localharness_pb2.CallHookRequest(
+                request_id="req_none",
+                name="PreTurn",
+                type=localharness_pb2.LIFECYCLE_HOOK_PRE_TURN,
+                pre_turn_args=localharness_pb2.PreTurnArgs(
+                    user_input=localharness_pb2.UserInput(
+                        parts=[localharness_pb2.UserInput.Part(text="")]
+                    )
+                ),
+            )
+        )
+    )
+    await asyncio.sleep(0.05)
     self.assertEqual(captured, [""])
 
   async def test_tool_hook_deny(self):
@@ -2578,6 +2616,19 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
         )
     )
     await harness.send_event(idle_event)
+    await harness.send_event(
+        localharness_pb2.OutputEvent(
+            call_hook_request=localharness_pb2.CallHookRequest(
+                request_id="post_req_1",
+                name="PostTurn",
+                type=localharness_pb2.LIFECYCLE_HOOK_POST_TURN,
+                post_turn_args=localharness_pb2.PostTurnArgs(
+                    response_text="Final answer"
+                ),
+            )
+        )
+    )
+    await asyncio.sleep(0.05)
 
     # Drain receive_steps to trigger terminal detection + hook dispatch.
     steps = []
@@ -2711,6 +2762,19 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
     await harness.send_event(env_event)
     await harness.send_event(user_event)
     await harness.send_event(idle_event)
+    await harness.send_event(
+        localharness_pb2.OutputEvent(
+            call_hook_request=localharness_pb2.CallHookRequest(
+                request_id="post_req_2",
+                name="PostTurn",
+                type=localharness_pb2.LIFECYCLE_HOOK_POST_TURN,
+                post_turn_args=localharness_pb2.PostTurnArgs(
+                    response_text="Final answer"
+                ),
+            )
+        )
+    )
+    await asyncio.sleep(0.05)
 
     steps = []
     async for step in harness.conn.receive_steps():

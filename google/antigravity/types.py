@@ -1145,3 +1145,32 @@ def from_file(
       Image | Document | Audio | Video,
       media_cls(data=data, mime_type=mime_guess, description=description),
   )
+
+
+def from_bytes(
+    data: bytes, mime_type: str, description: str | None = None
+) -> Image | Document | Audio | Video:
+  """Automatically resolves raw bytes and a MIME type into the correct Content primitive.
+
+  Args:
+      data: Raw file bytes.
+      mime_type: The MIME type of the content.
+      description: Optional text description of the media.
+
+  Returns:
+      A specialized media object (Image, Document, Audio, or Video) based on the
+      MIME type.
+
+  Raises:
+      ValueError: If the MIME type is unsupported.
+  """
+  media_cls = _MIME_TO_MEDIA_CLASS.get(mime_type)
+  if media_cls is None:
+    raise ValueError(
+        f"Unsupported MIME type: '{mime_type}'. "
+        f"Supported file formats in the SDK are: {sorted(_MIME_TO_MEDIA_CLASS)}"
+    )
+  return cast(
+      Image | Document | Audio | Video,
+      media_cls(data=data, mime_type=mime_type, description=description),
+  )

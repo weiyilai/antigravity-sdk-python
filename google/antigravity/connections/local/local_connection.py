@@ -550,6 +550,9 @@ class LocalConnection(connection.Connection):
     self._ws = ws
     self._tool_runner = tool_runner
     self.__initial_history = initial_history or []
+    self._client_cancelled = False
+    self._is_idle = asyncio.Event()
+    self._is_idle.set()
     self._hook_router = (
         HookRouter(hook_runner, self._send_input_event) if hook_runner else None
     )
@@ -557,12 +560,6 @@ class LocalConnection(connection.Connection):
     self._step_queue = asyncio.Queue()
     self._background_tasks = set()
     self._reader_task = asyncio.create_task(self._ws_reader_loop())
-    self._current_turn_context = None
-    self._cancelled = False
-    self._client_cancelled = False
-    self._cancelled_message = ""
-    self._is_idle = asyncio.Event()
-    self._is_idle.set()
     # Set of trajectory IDs for currently-running subagents. The connection
     # is only considered idle when the parent trajectory is idle AND this
     # set is empty, ensuring post-tool-call hooks for subagent completions
@@ -618,24 +615,12 @@ class LocalConnection(connection.Connection):
       prompt: The user prompt or content to send.
       **kwargs: Strategy-specific options.
     """
-    self._cancelled = False
     self._client_cancelled = False
     self._is_idle.clear()
     self._parent_idle = False
     self._active_subagent_ids.clear()
     self._subagent_responses.clear()
     self._main_trajectory_id = None
-    if self._hook_runner:
-      res, turn_context = await self._hook_runner.dispatch_pre_turn(prompt)
-      self._current_turn_context = turn_context
-      if not res.allow:
-        logging.warning("Turn denied by hook: %s", res.message)
-        self._cancelled = True
-        self._cancelled_message = (
-            res.message or "Turn execution denied by hook."
-        )
-        self._is_idle.set()
-        return
 
     if prompt is None:
       event = localharness_pb2.InputEvent(user_input="")
@@ -664,15 +649,6 @@ class LocalConnection(connection.Connection):
       )
     self._is_receiving = True
     try:
-      if self._cancelled:
-        yield LocalConnectionStep(
-            status=types.StepStatus.CANCELED,
-            error=self._cancelled_message,
-            source=types.StepSource.SYSTEM,
-            type=types.StepType.SYSTEM_MESSAGE,
-        )
-        return
-
       if self._is_idle.is_set() and self._step_queue.empty():
         if self._client_cancelled:
           raise types.AntigravityCancelledError()
@@ -727,35 +703,6 @@ class LocalConnection(connection.Connection):
             logging.warning(
                 "System step error (HTTP %s): %s", http_code, step_obj.error
             )
-
-        is_from_model = step_obj.source == types.StepSource.MODEL
-        is_done = step_obj.status == types.StepStatus.DONE
-        is_terminal = is_done or step_obj.status in (
-            types.StepStatus.ERROR,
-            types.StepStatus.CANCELED,
-        )
-        is_target_user = getattr(step_obj, "target", None) == "TARGET_USER"
-        is_main_trajectory = (
-            getattr(step_obj, "trajectory_id", None) == self._main_trajectory_id
-        )
-
-        if (
-            is_terminal
-            and is_target_user
-            and is_from_model
-            and is_main_trajectory
-        ):
-          # Dispatch post-turn hook with the final response content.
-          if self._hook_runner and self._current_turn_context:
-            await self._hook_runner.dispatch_post_turn(
-                self._current_turn_context, step_obj.content or ""
-            )
-            # We keep self._current_turn_context alive for late-arriving events
-            # (compaction, subagents, tool completions) and only clear it
-            # when the connection goes idle.
-          # Don't force idle here — wait for the TrajectoryStateUpdate
-          # path to confirm that the parent and all subagent trajectories
-          # have completed.
     finally:
       self._is_receiving = False
 
@@ -886,9 +833,9 @@ class LocalConnection(connection.Connection):
     Callers must ensure self._hook_runner is not None before calling.
     """
     assert self._hook_runner is not None
-    return self._current_turn_context or hooks.TurnContext(
-        self._hook_runner.session_context
-    )
+    if self._hook_router and self._hook_router.current_turn_context:
+      return self._hook_router.current_turn_context
+    return hooks.TurnContext(self._hook_runner.session_context)
 
   def _run_in_background(self, coro) -> None:
     """Schedules a coroutine as a fire-and-forget background task."""
@@ -1123,6 +1070,19 @@ class LocalConnection(connection.Connection):
                     types.AntigravityExecutionError(tsu.error)
                 )
 
+          elif (
+              tsu.state
+              == localharness_pb2.TrajectoryStateUpdate.State.STATE_CANCELLED
+          ):
+            # The turn was rejected (e.g. by a PreTurn hook DENY).
+            # Queue an error so receive_steps() raises it on the correct
+            # turn, then mark idle.
+            msg = tsu.error if tsu.HasField("error") else "Turn cancelled"
+            await self._step_queue.put(types.AntigravityExecutionError(msg))
+            if not self._is_idle.is_set():
+              self._is_idle.set()
+              await self._step_queue.put(_IDLE_SENTINEL)
+
         elif event.HasField("tool_call"):
           self._run_in_background(self._handle_tool_call(event.tool_call))
     except websockets.ConnectionClosed as e:
@@ -1173,9 +1133,7 @@ class LocalConnection(connection.Connection):
       ]
 
       if self._hook_runner and questions_list:
-        ctx = self._current_turn_context or hooks.TurnContext(
-            self._hook_runner.session_context
-        )
+        ctx = self._get_turn_context()
         _, question_res, _ = await self._hook_runner.dispatch_interaction(
             turn_context=ctx,
             interaction_spec=types.AskQuestionInteractionSpec(
@@ -1296,9 +1254,7 @@ class LocalConnection(connection.Connection):
       if tc.name == DEFAULT_HOST_TOOL_NAME:
         allow = True
       elif self._hook_runner:
-        ctx = self._current_turn_context or hooks.TurnContext(
-            self._hook_runner.session_context
-        )
+        ctx = self._get_turn_context()
         res, _, op_ctx = await self._hook_runner.dispatch_pre_tool_call(
             turn_context=ctx, tool_call=tc
         )
@@ -1308,9 +1264,7 @@ class LocalConnection(connection.Connection):
       # when the step transitions to STATE_DONE.
       if allow and tc.name != DEFAULT_HOST_TOOL_NAME and self._hook_runner:
         if op_ctx is None:
-          ctx = self._current_turn_context or hooks.TurnContext(
-              self._hook_runner.session_context
-          )
+          ctx = self._get_turn_context()
           op_ctx = hooks.OperationContext(ctx)
         pending_key = _PendingCallKey(
             trajectory_id=step_update.trajectory_id,
@@ -1368,9 +1322,7 @@ class LocalConnection(connection.Connection):
       op_context = None
 
       if self._hook_runner:
-        ctx = self._current_turn_context or hooks.TurnContext(
-            self._hook_runner.session_context
-        )
+        ctx = self._get_turn_context()
         res, tc, op_context = await self._hook_runner.dispatch_pre_tool_call(
             turn_context=ctx, tool_call=tc
         )
@@ -1881,11 +1833,7 @@ class LocalConnectionStrategy(connection.ConnectionStrategy):
         _to_mcp_server_proto(s) for s in self._mcp_servers or []
     ]
 
-    enabled_hooks = []
-    if self._hook_runner and self._hook_runner.on_session_start_hooks:
-      enabled_hooks.append(localharness_pb2.LIFECYCLE_HOOK_ON_SESSION_START)
-    if self._hook_runner and self._hook_runner.on_session_end_hooks:
-      enabled_hooks.append(localharness_pb2.LIFECYCLE_HOOK_ON_SESSION_END)
+    enabled_hooks = self._get_enabled_hooks()
 
     custom_agents_protos = self._build_custom_subagents_protos(
         main_agent_tool_protos
@@ -1910,6 +1858,47 @@ class LocalConnectionStrategy(connection.ConnectionStrategy):
         enabled_hooks=enabled_hooks,
         custom_subagents=custom_agents_protos,
     )
+
+  def _get_enabled_hooks(self) -> list[Any]:
+    """Returns a list of proto enum IDs for registered hook collections."""
+    enabled_hooks = []
+    if not self._hook_runner:
+      return enabled_hooks
+
+    hook_mapping = [
+        (
+            self._hook_runner.on_session_start_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_ON_SESSION_START,
+        ),
+        (
+            self._hook_runner.on_session_end_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_ON_SESSION_END,
+        ),
+        (
+            self._hook_runner.pre_turn_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_PRE_TURN,
+        ),
+        (
+            self._hook_runner.post_turn_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_POST_TURN,
+        ),
+        (
+            self._hook_runner.pre_tool_call_decide_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_PRE_TOOL,
+        ),
+        (
+            self._hook_runner.post_tool_call_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_POST_TOOL,
+        ),
+        (
+            self._hook_runner.on_tool_error_hooks,
+            localharness_pb2.LIFECYCLE_HOOK_ON_TOOL_ERROR,
+        ),
+    ]
+    for hooks_list, hook_type in hook_mapping:
+      if hooks_list:
+        enabled_hooks.append(hook_type)
+    return enabled_hooks
 
   def connect(self) -> connection.Connection:
     """Returns the established Connection."""
