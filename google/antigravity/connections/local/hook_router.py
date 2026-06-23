@@ -19,6 +19,7 @@ from typing import Any, Callable, Coroutine
 
 from google.antigravity import types
 from google.antigravity.connections.local import localharness_pb2
+from google.antigravity.connections.local.local_connection_config import PROTO_FIELD_TO_SDK_NAME
 from google.antigravity.hooks import hook_runner as hook_runner_lib
 from google.antigravity.hooks import hooks
 
@@ -65,9 +66,11 @@ class HookRouter:
       event_sender: Callable[
           [localharness_pb2.InputEvent], Coroutine[Any, Any, None]
       ],
+      result_extractor: Callable[[Any], Any] | None = None,
   ):
     self._hook_runner = hook_runner
     self._send = event_sender
+    self._extract_result = result_extractor
     self._current_turn_context: Any = None
 
     self._handlers: dict[
@@ -88,6 +91,7 @@ class HookRouter:
         ),
         localharness_pb2.LIFECYCLE_HOOK_PRE_TURN: self._handle_pre_turn,
         localharness_pb2.LIFECYCLE_HOOK_POST_TURN: self._handle_post_turn,
+        localharness_pb2.LIFECYCLE_HOOK_POST_TOOL: self._handle_post_tool,
     }
 
   @property
@@ -144,6 +148,35 @@ class HookRouter:
     )
     await self._hook_runner.dispatch_post_turn(turn_ctx, response_text)
     self._current_turn_context = None
+    resp.empty_result.CopyFrom(localharness_pb2.EmptyResult())
+
+  async def _handle_post_tool(
+      self,
+      req: localharness_pb2.CallHookRequest,
+      resp: localharness_pb2.CallHookResponse,
+  ) -> None:
+    tool_name = ""
+    result_val: Any = None
+    error_str = ""
+    if req.HasField("post_tool_args"):
+      pta = req.post_tool_args
+      tool_name = PROTO_FIELD_TO_SDK_NAME.get(pta.tool_name, pta.tool_name)
+      result_val = pta.result if not pta.error else None
+      error_str = pta.error
+      if pta.HasField("step_update") and self._extract_result:
+        extracted = self._extract_result(pta.step_update)
+        if extracted is not None:
+          result_val = extracted
+    tool_result = types.ToolResult(
+        name=tool_name,
+        result=result_val,
+        error=error_str or None,
+    )
+    turn_ctx = self._current_turn_context or hooks.TurnContext(
+        self._hook_runner.session_context
+    )
+    op_ctx = hooks.OperationContext(turn_ctx)
+    await self._hook_runner.dispatch_post_tool_call(op_ctx, tool_result)
     resp.empty_result.CopyFrom(localharness_pb2.EmptyResult())
 
   async def handle(self, req: localharness_pb2.CallHookRequest) -> None:

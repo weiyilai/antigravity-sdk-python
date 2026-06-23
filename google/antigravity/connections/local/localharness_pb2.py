@@ -300,9 +300,10 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b' \x01(\x0b\x32%.antigravity.localharness.EmptyResultH\x00\x12\x17\n\rerror_message\x18\x05'
     b' \x01(\tH\x00\x42\x08\n\x06result"8\n\x0bPreToolArgs\x12\x11\n\ttool_name\x18\x01'
     b' \x01(\t\x12\x16\n\x0e\x61rguments_json\x18\x02'
-    b' \x01(\t"@\n\x0cPostToolArgs\x12\x11\n\ttool_name\x18\x01'
+    b' \x01(\t"{\n\x0cPostToolArgs\x12\x11\n\ttool_name\x18\x01'
     b' \x01(\t\x12\x0e\n\x06result\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03'
-    b' \x01(\t"F\n\x0bPreTurnArgs\x12\x37\n\nuser_input\x18\x01'
+    b' \x01(\t\x12\x39\n\x0bstep_update\x18\x04'
+    b' \x01(\x0b\x32$.antigravity.localharness.StepUpdate"F\n\x0bPreTurnArgs\x12\x37\n\nuser_input\x18\x01'
     b' \x01(\x0b\x32#.antigravity.localharness.UserInput"%\n\x0cPostTurnArgs\x12\x15\n\rresponse_text\x18\x01'
     b' \x01(\t"\r\n\x0b\x45mptyResult"\x9e\x01\n\rPreToolResult\x12\x42\n\x08\x64\x65\x63ision\x18\x01'
     b' \x01(\x0e\x32\x30.antigravity.localharness.PreToolResult.Decision\x12\x0e\n\x06reason\x18\x02'
@@ -332,12 +333,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_MCPSTDIOTRANSPORT_ENVENTRY']._serialized_options = b'8\001'
   _globals['_MCPHTTPTRANSPORT_HEADERSENTRY']._loaded_options = None
   _globals['_MCPHTTPTRANSPORT_HEADERSENTRY']._serialized_options = b'8\001'
-  _globals['_LIFECYCLEHOOK']._serialized_start = 13733
-  _globals['_LIFECYCLEHOOK']._serialized_end = 14004
-  _globals['_MODELTYPE']._serialized_start = 14006
-  _globals['_MODELTYPE']._serialized_end = 14088
-  _globals['_NULLVALUE']._serialized_start = 14090
-  _globals['_NULLVALUE']._serialized_end = 14117
+  _globals['_LIFECYCLEHOOK']._serialized_start = 13792
+  _globals['_LIFECYCLEHOOK']._serialized_end = 14063
+  _globals['_MODELTYPE']._serialized_start = 14065
+  _globals['_MODELTYPE']._serialized_end = 14147
+  _globals['_NULLVALUE']._serialized_start = 14149
+  _globals['_NULLVALUE']._serialized_end = 14176
   _globals['_INPUTCONFIG']._serialized_start = 49
   _globals['_INPUTCONFIG']._serialized_end = 195
   _globals['_INITIALIZECONVERSATIONEVENT']._serialized_start = 197
@@ -525,21 +526,21 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PRETOOLARGS']._serialized_start = 12915
   _globals['_PRETOOLARGS']._serialized_end = 12971
   _globals['_POSTTOOLARGS']._serialized_start = 12973
-  _globals['_POSTTOOLARGS']._serialized_end = 13037
-  _globals['_PRETURNARGS']._serialized_start = 13039
-  _globals['_PRETURNARGS']._serialized_end = 13109
-  _globals['_POSTTURNARGS']._serialized_start = 13111
-  _globals['_POSTTURNARGS']._serialized_end = 13148
-  _globals['_EMPTYRESULT']._serialized_start = 13150
-  _globals['_EMPTYRESULT']._serialized_end = 13163
-  _globals['_PRETOOLRESULT']._serialized_start = 13166
-  _globals['_PRETOOLRESULT']._serialized_end = 13324
-  _globals['_PRETOOLRESULT_DECISION']._serialized_start = 13267
-  _globals['_PRETOOLRESULT_DECISION']._serialized_end = 13324
-  _globals['_PRETURNRESULT']._serialized_start = 13327
-  _globals['_PRETURNRESULT']._serialized_end = 13485
-  _globals['_PRETURNRESULT_DECISION']._serialized_start = 13267
-  _globals['_PRETURNRESULT_DECISION']._serialized_end = 13324
-  _globals['_CUSTOMAGENT']._serialized_start = 13488
-  _globals['_CUSTOMAGENT']._serialized_end = 13730
+  _globals['_POSTTOOLARGS']._serialized_end = 13096
+  _globals['_PRETURNARGS']._serialized_start = 13098
+  _globals['_PRETURNARGS']._serialized_end = 13168
+  _globals['_POSTTURNARGS']._serialized_start = 13170
+  _globals['_POSTTURNARGS']._serialized_end = 13207
+  _globals['_EMPTYRESULT']._serialized_start = 13209
+  _globals['_EMPTYRESULT']._serialized_end = 13222
+  _globals['_PRETOOLRESULT']._serialized_start = 13225
+  _globals['_PRETOOLRESULT']._serialized_end = 13383
+  _globals['_PRETOOLRESULT_DECISION']._serialized_start = 13326
+  _globals['_PRETOOLRESULT_DECISION']._serialized_end = 13383
+  _globals['_PRETURNRESULT']._serialized_start = 13386
+  _globals['_PRETURNRESULT']._serialized_end = 13544
+  _globals['_PRETURNRESULT_DECISION']._serialized_start = 13326
+  _globals['_PRETURNRESULT_DECISION']._serialized_end = 13383
+  _globals['_CUSTOMAGENT']._serialized_start = 13547
+  _globals['_CUSTOMAGENT']._serialized_end = 13789
 # @@protoc_insertion_point(module_scope)

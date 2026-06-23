@@ -43,6 +43,7 @@ from google.antigravity.connections import connection
 from google.antigravity.connections.local import localharness_pb2
 from google.antigravity.connections.local import types as local_types
 from google.antigravity.connections.local.hook_router import HookRouter
+from google.antigravity.connections.local.local_connection_config import BUILTIN_TOOL_PROTO_FIELDS
 from google.antigravity.hooks import hook_runner as h_runner
 from google.antigravity.hooks import hooks
 from google.antigravity.tools import tool_runner as t_runner
@@ -105,23 +106,6 @@ _TARGET_MAP = {
     "TARGET_UNSPECIFIED": types.StepTarget.UNSPECIFIED,
 }
 
-# Map from BuiltinTools enum to the proto field name on StepUpdate.
-# Used for (a) determining step type and (b) extracting tool-confirmation args.
-# Kept as an explicit map because enum values and proto field names may diverge.
-_BUILTIN_TOOL_PROTO_FIELDS: dict[types.BuiltinTools, str] = {
-    types.BuiltinTools.CREATE_FILE: "create_file",
-    types.BuiltinTools.EDIT_FILE: "edit_file",
-    types.BuiltinTools.FIND_FILE: "find_file",
-    types.BuiltinTools.LIST_DIR: "list_directory",
-    types.BuiltinTools.RUN_COMMAND: "run_command",
-    types.BuiltinTools.SEARCH_DIR: "search_directory",
-    types.BuiltinTools.VIEW_FILE: "view_file",
-    types.BuiltinTools.START_SUBAGENT: "invoke_subagent",
-    types.BuiltinTools.GENERATE_IMAGE: "generate_image",
-    types.BuiltinTools.SEARCH_WEB: "search_web",
-    types.BuiltinTools.FINISH: "finish",
-}
-
 # Fallback action name used when a tool confirmation request does not match any
 # known BuiltinTools proto field. This represents a pre-request notification
 # from the Connection for a host-side tool whose specific call will follow.
@@ -174,13 +158,13 @@ def _extract_tool_result(
   Returns:
     A typed result object, or None if no structured result is present.
   """
-  _run_command = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.RUN_COMMAND]
-  _list_dir = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.LIST_DIR]
-  _find_file = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.FIND_FILE]
-  _search_dir = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.SEARCH_DIR]
-  _edit_file = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.EDIT_FILE]
-  _gen_image = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.GENERATE_IMAGE]
-  _search_web = _BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.SEARCH_WEB]
+  _run_command = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.RUN_COMMAND]
+  _list_dir = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.LIST_DIR]
+  _find_file = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.FIND_FILE]
+  _search_dir = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.SEARCH_DIR]
+  _edit_file = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.EDIT_FILE]
+  _gen_image = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.GENERATE_IMAGE]
+  _search_web = BUILTIN_TOOL_PROTO_FIELDS[types.BuiltinTools.SEARCH_WEB]
 
   # run_command -> raw stdout/stderr, e.g. "hello world\n"
   if step_update.HasField(_run_command):
@@ -277,7 +261,7 @@ class LocalConnectionStep(types.Step):
     active_tool_pair = next(
         (
             (tool_enum.value, step_dict[proto_field])
-            for tool_enum, proto_field in _BUILTIN_TOOL_PROTO_FIELDS.items()
+            for tool_enum, proto_field in BUILTIN_TOOL_PROTO_FIELDS.items()
             if proto_field in step_dict
         ),
         (None, {}),
@@ -323,8 +307,7 @@ class LocalConnectionStep(types.Step):
     elif step_dict.get("finish") is not None:
       step_type = types.StepType.FINISH
     elif active_tool_name or any(
-        step_dict.get(k) is not None
-        for k in _BUILTIN_TOOL_PROTO_FIELDS.values()
+        step_dict.get(k) is not None for k in BUILTIN_TOOL_PROTO_FIELDS.values()
     ):
       step_type = types.StepType.TOOL_CALL
     elif step_dict.get("text"):
@@ -554,7 +537,9 @@ class LocalConnection(connection.Connection):
     self._is_idle = asyncio.Event()
     self._is_idle.set()
     self._hook_router = (
-        HookRouter(hook_runner, self._send_input_event) if hook_runner else None
+        HookRouter(hook_runner, self._send_input_event, _extract_tool_result)
+        if hook_runner
+        else None
     )
     self._step_trackers: dict[tuple[str, int], _StepTracker] = {}
     self._step_queue = asyncio.Queue()
@@ -565,10 +550,6 @@ class LocalConnection(connection.Connection):
     # set is empty, ensuring post-tool-call hooks for subagent completions
     # fire before receive_steps() returns.
     self._active_subagent_ids: set[str] = set()
-    # Maps subagent trajectory_id -> final response content. Populated
-    # when the reader loop sees an is_complete_response step from a subagent
-    # trajectory, and consumed when that trajectory goes idle.
-    self._subagent_responses: dict[str, str] = {}
     self._parent_idle = True
     # The main trajectory ID is tracked on the first step we see.
     self._main_trajectory_id: str | None = None
@@ -619,7 +600,6 @@ class LocalConnection(connection.Connection):
     self._is_idle.clear()
     self._parent_idle = False
     self._active_subagent_ids.clear()
-    self._subagent_responses.clear()
     self._main_trajectory_id = None
 
     if prompt is None:
@@ -948,32 +928,17 @@ class LocalConnection(connection.Connection):
               and step_obj.trajectory_id
               and step_obj.trajectory_id != self._main_trajectory_id
           )
-          if (
-              is_subagent_step
-              and step_obj.source == types.StepSource.MODEL
-              and step_obj.content
-          ):
-            self._subagent_responses[step_obj.trajectory_id] = step_obj.content
-
-          # Dispatch post-tool-call or on-tool-error hooks for built-in tools
-          # that were approved via ToolConfirmation. The harness executes them
-          # internally; we observe completion via step state transitions.
+          # TODO(abhipatel): Post-tool hook for STATE_DONE is now dispatched by
+          # the harness via CallHookRequest. Only STATE_ERROR tracking remains
+          # for the on_tool_error hook (to be migrated in a follow-up).
           if (
               step_key in self._pending_builtin_tool_calls
               and step_update.state
               == localharness_pb2.StepUpdate.State.STATE_DONE
           ):
-            tc, op_ctx = self._pending_builtin_tool_calls.pop(step_key)
-            if self._hook_runner:
-              extracted = _extract_tool_result(step_update)
-              result = types.ToolResult(
-                  name=tc.name,
-                  id=tc.id,
-                  result=extracted or step_obj.content,
-              )
-              self._run_in_background(
-                  self._hook_runner.dispatch_post_tool_call(op_ctx, result)
-              )
+            # Remove the pending entry — harness already fired the post-tool
+            # hook.
+            self._pending_builtin_tool_calls.pop(step_key)
           elif (
               step_key in self._pending_builtin_tool_calls
               and step_update.state
@@ -1034,18 +999,9 @@ class LocalConnection(connection.Connection):
               tsu.state
               == localharness_pb2.TrajectoryStateUpdate.State.STATE_IDLE
           ):
-            # Dispatch post-tool-call hook if this is a subagent trajectory.
+            # Clean up subagent tracking when its trajectory completes.
             if is_subagent:
               self._active_subagent_ids.discard(tsu.trajectory_id)
-              if self._hook_runner:
-                op_ctx = hooks.OperationContext(self._get_turn_context())
-                op_ctx.set_state("trajectory_id", tsu.trajectory_id)
-                response = self._subagent_responses.pop(tsu.trajectory_id, "")
-                result = types.ToolResult(
-                    name=types.BuiltinTools.START_SUBAGENT.value,
-                    result=response or tsu.trajectory_id,
-                )
-                await self._hook_runner.dispatch_post_tool_call(op_ctx, result)
             else:
               # Parent trajectory went idle.
               self._parent_idle = True
@@ -1210,7 +1166,7 @@ class LocalConnection(connection.Connection):
       args = {}
       found_action = False
 
-      for tool_enum, proto_field in _BUILTIN_TOOL_PROTO_FIELDS.items():
+      for tool_enum, proto_field in BUILTIN_TOOL_PROTO_FIELDS.items():
         if step_update.HasField(proto_field):
           action_str = tool_enum.value
           found_action = True
@@ -1374,13 +1330,6 @@ class LocalConnection(connection.Connection):
                 name=tool_call.name,
                 result=recovery_val,
             )
-
-        # Dispatch post-tool-call hook on success.
-        elif not result.error and self._hook_runner:
-          if not op_context:
-            op_context = hooks.OperationContext(self._get_turn_context())
-          await self._hook_runner.dispatch_post_tool_call(op_context, result)
-
         await self._send_tool_results([result])
       else:
         logging.warning(

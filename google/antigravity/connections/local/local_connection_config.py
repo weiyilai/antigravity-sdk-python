@@ -34,6 +34,27 @@ DEFAULT_APP_DATA_DIR = (
     (pathlib.Path("~") / ".gemini" / "antigravity").expanduser().resolve()
 )
 
+# Map from BuiltinTools enum to the canonical proto field name on StepUpdate.
+BUILTIN_TOOL_PROTO_FIELDS: dict[types.BuiltinTools, str] = {
+    types.BuiltinTools.CREATE_FILE: "create_file",
+    types.BuiltinTools.EDIT_FILE: "edit_file",
+    types.BuiltinTools.FIND_FILE: "find_file",
+    types.BuiltinTools.LIST_DIR: "list_directory",
+    types.BuiltinTools.RUN_COMMAND: "run_command",
+    types.BuiltinTools.SEARCH_DIR: "search_directory",
+    types.BuiltinTools.VIEW_FILE: "view_file",
+    types.BuiltinTools.START_SUBAGENT: "invoke_subagent",
+    types.BuiltinTools.GENERATE_IMAGE: "generate_image",
+    types.BuiltinTools.SEARCH_WEB: "search_web",
+    types.BuiltinTools.FINISH: "finish",
+}
+
+# Reverse map from canonical StepUpdate proto field name to SDK public
+# BuiltinTools value.
+PROTO_FIELD_TO_SDK_NAME: dict[str, str] = {
+    v: k.value for k, v in BUILTIN_TOOL_PROTO_FIELDS.items()
+}
+
 
 class LocalAgentConfig(connection.AgentConfig):
   """Configuration for the local harness backend.
