@@ -183,6 +183,7 @@ class LocalAgentConfig(BaseLocalAgentConfig):
       vertex: bool | None = None,
       project: str | None = None,
       location: str | None = None,
+      subagents: list[types.SubagentConfig] | None = None,
       **kwargs: Any,
   ):
 
@@ -194,7 +195,9 @@ class LocalAgentConfig(BaseLocalAgentConfig):
     if "kwargs" in init_data:
       kwargs_dict = init_data.pop("kwargs")
       if isinstance(kwargs_dict, dict):
-        init_data.update(kwargs_dict)
+        init_data.update(
+            {k: v for k, v in kwargs_dict.items() if v is not None}
+        )
     pydantic.BaseModel.__init__(self, **init_data)
 
   def _build_shorthand_endpoint(self) -> types.ModelEndpoint | None:

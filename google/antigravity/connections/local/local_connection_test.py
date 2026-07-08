@@ -3998,6 +3998,20 @@ class LocalConnectionSubagentsTest(unittest.IsolatedAsyncioTestCase):
     self.assertFalse(custom_agent.harness_side_tools.subagents.enabled)
     self.assertFalse(custom_agent.harness_side_tools.file_edit.enabled)
 
+  def test_local_agent_config_subagents_none_initializes(self):
+    config = local_connection_config.LocalAgentConfig(subagents=None)
+    self.assertEqual(config.subagents, [])
+
+  def test_local_agent_config_kwargs_none_filtered(self):
+    config = local_connection_config.LocalAgentConfig(
+        **{"subagents": None, "capabilities": None, "conversation_id": None}
+    )
+    self.assertEqual(config.subagents, [])
+    self.assertIsInstance(config.capabilities, types.CapabilitiesConfig)
+    self.assertIsNone(config.conversation_id)
+
+
+
 
 if __name__ == "__main__":
   absltest.main()
