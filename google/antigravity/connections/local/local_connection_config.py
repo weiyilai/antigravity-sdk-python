@@ -194,6 +194,12 @@ class LocalAgentConfig(BaseLocalAgentConfig):
       location: str | None = None,
       **kwargs: Any,
   ):
+    if vertex is None and (
+        os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("true", "1")
+        or os.environ.get("GOOGLE_GENAI_USE_ENTERPRISE", "").lower()
+        in ("true", "1")
+    ):
+      vertex = True
 
     init_data = {
         k: v

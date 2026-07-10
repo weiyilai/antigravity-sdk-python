@@ -1814,6 +1814,56 @@ class LocalConnectionStrategyApiKeyTest(unittest.IsolatedAsyncioTestCase):
       async with strategy:
         pass
 
+  @mock.patch.dict(
+      "os.environ",
+      {
+          "GOOGLE_GENAI_USE_VERTEXAI": "True",
+          "GOOGLE_CLOUD_PROJECT": "env-project",
+          "GOOGLE_CLOUD_LOCATION": "env-location",
+      },
+      clear=True,
+  )
+  @mock.patch("subprocess.Popen")
+  async def test_bare_config_routes_to_vertex_via_env(self, mock_popen):
+    """Bare LocalAgentConfig + Vertex env vars routes to Vertex and validates."""
+    mock_proc = mock.MagicMock()
+    mock_proc.stdin = mock.MagicMock()
+    mock_proc.stdout = mock.MagicMock()
+    mock_proc.stderr = mock.MagicMock()
+    mock_proc.stdout.read.return_value = b""
+    mock_popen.return_value = mock_proc
+
+    cfg = local_connection_config.LocalAgentConfig(model="gemini-3.5-flash")
+    self.assertIsInstance(cfg.models[0].endpoint, types.VertexEndpoint)
+    self.assertEqual(cfg.models[0].endpoint.project, "env-project")
+    self.assertEqual(cfg.models[0].endpoint.location, "env-location")
+    strategy = self._make_strategy(models=cfg.models)
+    with self.assertRaises(RuntimeError):
+      async with strategy:
+        pass
+
+  @mock.patch.dict(
+      "os.environ", {"GOOGLE_GENAI_USE_ENTERPRISE": "True"}, clear=True
+  )
+  def test_bare_config_routes_to_vertex_via_use_enterprise_env(self):
+    """USE_ENTERPRISE alone also triggers Vertex routing (GEAP recipe)."""
+    cfg = local_connection_config.LocalAgentConfig(model="gemini-3.5-flash")
+    self.assertIsInstance(cfg.models[0].endpoint, types.VertexEndpoint)
+
+  @mock.patch.dict(
+      "os.environ",
+      {
+          "GOOGLE_CLOUD_PROJECT": "env-project",
+          "GOOGLE_CLOUD_LOCATION": "env-location",
+      },
+      clear=True,
+  )
+  def test_vertex_endpoint_direct_construction_hydrates_from_env(self):
+    """VertexEndpoint() constructed directly also hydrates from env."""
+    ep = types.VertexEndpoint()
+    self.assertEqual(ep.project, "env-project")
+    self.assertEqual(ep.location, "env-location")
+
   @mock.patch.dict("os.environ", {"GEMINI_API_KEY": "env-key"}, clear=True)
   @mock.patch("subprocess.Popen")
   async def test_accepts_env_var_api_key(self, mock_popen):
