@@ -12,6 +12,10 @@ Google Antigravity SDK agents.
 
 Google Antigravity SDK's default model is `gemini-3.5-flash`.
 
+### Default Image Generation Model
+
+Google Antigravity SDK's default image generation model is `gemini-3.1-flash-lite-image`.
+
 ### Finding Valid Models
 
 To find the most up-to-date list of valid Gemini model identifiers, refer to the

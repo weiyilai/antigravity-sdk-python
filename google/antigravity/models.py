@@ -33,7 +33,7 @@ import pydantic
 # =============================================================================
 
 DEFAULT_MODEL = "gemini-3.5-flash"
-DEFAULT_IMAGE_GENERATION_MODEL = "gemini-3.1-flash-image-preview"
+DEFAULT_IMAGE_GENERATION_MODEL = "gemini-3.1-flash-lite-image"
 
 
 # =============================================================================
