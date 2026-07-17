@@ -743,6 +743,18 @@ class ImageTest(unittest.TestCase):
       self.assertEqual(img.mime_type, "image/png")
       self.assertEqual(img.description, "profile photo")
 
+  def test_from_file_inference_failure_raises(self):
+    """Verifies that from_file loader raises ValueError when extension is unknown."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_file = pathlib.Path(tmpdir) / "photo.unknown"
+      fake_bytes = b"some_bytes"
+      tmp_file.write_bytes(fake_bytes)
+
+      with self.assertRaisesRegex(
+          ValueError, "Could not infer a valid MIME type"
+      ):
+        types.Image.from_file(tmp_file)
+
 
 class AudioTest(unittest.TestCase):
   """Validates the Audio content attachment primitive and its validators."""

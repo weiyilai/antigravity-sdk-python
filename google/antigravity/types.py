@@ -1052,9 +1052,14 @@ class _BaseMedia(pydantic.BaseModel):
     file_path = pathlib.Path(path)
     data = _read_file_safely(file_path)
     mime_guess, _ = mimetypes.guess_type(file_path)
+    if not mime_guess:
+      raise ValueError(
+          "Could not infer a valid MIME type for extension: "
+          f"'{file_path.suffix}'"
+      )
     return cls(
         data=data,
-        mime_type=mime_guess or "",
+        mime_type=mime_guess,
         description=description,
     )
 
