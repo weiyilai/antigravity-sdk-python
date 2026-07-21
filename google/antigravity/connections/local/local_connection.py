@@ -996,6 +996,7 @@ class LocalConnectionStrategy(connection.ConnectionStrategy):
           ws = await websockets.connect(
               ws_url,
               additional_headers={"x-goog-api-key": api_key},
+              max_size=None,
           )
           return ws, ws_url
         except (OSError, websockets.WebSocketException) as e:

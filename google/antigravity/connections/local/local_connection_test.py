@@ -651,6 +651,25 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         b"\xff\xd8\xff\xd9",
     )
 
+  async def test_large_tool_result_handled(self):
+    def large_tool():
+      return "X" * (5 * 1024 * 1024)
+
+    self.tool_runner.register(large_tool, name="large_tool")
+    harness = self._make_harness()
+
+    await harness.send_event(
+        localharness_pb2.OutputEvent(
+            tool_call=localharness_pb2.ToolCall(
+                id="call_large", name="large_tool", arguments_json="{}"
+            )
+        )
+    )
+
+    sent_data = await harness.wait_for_response()
+    resp = sent_data["toolResponse"]
+    self.assertEqual(resp["id"], "call_large")
+    self.assertGreaterEqual(len(resp["responseJson"]), 5 * 1024 * 1024)
 
   async def test_question_hook_integration(self):
     hr = hook_runner.HookRunner()
@@ -2149,10 +2168,12 @@ class LocalConnectionStrategyConnectTest(unittest.IsolatedAsyncioTestCase):
         mock.call(
             "ws://localhost:8080/",
             additional_headers={"x-goog-api-key": "fake-key"},
+            max_size=None,
         ),
         mock.call(
             "ws://127.0.0.1:8080/",
             additional_headers={"x-goog-api-key": "fake-key"},
+            max_size=None,
         ),
     ])
 
@@ -2693,8 +2714,6 @@ class LocalConnectionSubagentHookTest(unittest.IsolatedAsyncioTestCase):
             total_token_count=250,
         ),
     )
-
-
 
 
 class LocalConnectionToolCallHooksTest(unittest.IsolatedAsyncioTestCase):
