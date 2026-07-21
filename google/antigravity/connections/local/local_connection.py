@@ -1021,6 +1021,8 @@ class LocalConnectionStrategy(connection.ConnectionStrategy):
         language="python",
         version=sdk_version,
         language_version=platform.python_version(),
+        os=platform.system().lower(),
+        os_version=platform.release(),
     )
     env_map = (
         {str(k): str(v) for k, v in self._env.items()} if self._env else {}
