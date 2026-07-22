@@ -259,10 +259,15 @@ class HookRouter:
   ) -> None:
     """Handles OnToolError lifecycle hooks dispatched by the Go harness."""
     error_message = "Tool failed"
+    tool_name = ""
+    server_name = None
     if req.HasField("on_tool_error_args"):
-      error_message = req.on_tool_error_args.error_message or error_message
+      ote = req.on_tool_error_args
+      error_message = ote.error_message or error_message
+      tool_name = PROTO_FIELD_TO_SDK_NAME.get(ote.tool_name, ote.tool_name)
+      server_name = ote.server_name or None
 
-    error = RuntimeError(error_message)
+    error = types.ToolExecutionError(error_message, tool_name, server_name)
     turn_ctx = self._current_turn_context or hooks.TurnContext(
         self._hook_runner.session_context
     )

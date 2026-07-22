@@ -602,11 +602,58 @@ class HookRouterOnToolErrorTest(absltest.TestCase):
 
       self.assertTrue(fired.is_set())
       self.assertLen(received_errors, 1)
-      self.assertIsInstance(received_errors[0], RuntimeError)
+      self.assertIsInstance(received_errors[0], types.ToolExecutionError)
+      self.assertEqual(received_errors[0].tool_name, "run_command")
+      self.assertIsNone(received_errors[0].server_name)
       self.assertEqual(str(received_errors[0]), "command failed")
       self.assertLen(sent_events, 1)
       resp = sent_events[0].call_hook_response
       self.assertEqual(resp.request_id, "test_on_error")
+      self.assertTrue(resp.HasField("empty_result"))
+
+    asyncio.run(_test())
+
+  def test_on_tool_error_with_server_name(self):
+
+    async def _test():
+      fired = asyncio.Event()
+      received_errors: list[Exception] = []
+
+      @hooks.on_tool_error
+      async def my_hook(data: Exception):
+        fired.set()
+        received_errors.append(data)
+        return None
+
+      hook_runner = h_runner.HookRunner(on_tool_error_hooks=[my_hook])
+      sent_events = []
+
+      async def mock_send(event: localharness_pb2.InputEvent):
+        sent_events.append(event)
+
+      router = HookRouter(hook_runner, mock_send)
+      req = localharness_pb2.CallHookRequest(
+          request_id="test_on_error_server",
+          name="OnToolError",
+          type=localharness_pb2.LIFECYCLE_HOOK_ON_TOOL_ERROR,
+          on_tool_error_args=localharness_pb2.OnToolErrorArgs(
+              tool_name="mcp_tool",
+              error_message="mcp error",
+              server_name="mcp_server",
+          ),
+      )
+
+      await router.handle(req)
+
+      self.assertTrue(fired.is_set())
+      self.assertLen(received_errors, 1)
+      self.assertIsInstance(received_errors[0], types.ToolExecutionError)
+      self.assertEqual(received_errors[0].tool_name, "mcp_tool")
+      self.assertEqual(received_errors[0].server_name, "mcp_server")
+      self.assertEqual(str(received_errors[0]), "mcp error")
+      self.assertLen(sent_events, 1)
+      resp = sent_events[0].call_hook_response
+      self.assertEqual(resp.request_id, "test_on_error_server")
       self.assertTrue(resp.HasField("empty_result"))
 
     asyncio.run(_test())

@@ -714,6 +714,28 @@ class AntigravityConnectionErrorTest(unittest.TestCase):
     self.assertEqual(str(err), "timeout")
 
 
+class ToolExecutionErrorTest(unittest.TestCase):
+  """Validates the ToolExecutionError exception class."""
+
+  def test_basic_construction(self):
+    """Verifies construction with required arguments and default server_name=None."""
+    err = types.ToolExecutionError("command failed", tool_name="run_command")
+    self.assertIsInstance(err, RuntimeError)
+    self.assertEqual(str(err), "command failed")
+    self.assertEqual(err.tool_name, "run_command")
+    self.assertIsNone(err.server_name)
+
+  def test_explicit_server_name(self):
+    """Verifies construction with explicit server_name."""
+    err = types.ToolExecutionError(
+        "query failed", tool_name="mcp_tool", server_name="mcp_server"
+    )
+    self.assertIsInstance(err, RuntimeError)
+    self.assertEqual(str(err), "query failed")
+    self.assertEqual(err.tool_name, "mcp_tool")
+    self.assertEqual(err.server_name, "mcp_server")
+
+
 class ImageTest(unittest.TestCase):
   """Tests for the Image content attachment primitive and its validators."""
 

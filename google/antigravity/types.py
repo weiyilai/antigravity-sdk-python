@@ -78,6 +78,7 @@ __all__ = [
     "AntigravityCancelledError",
     "AntigravityValidationError",
     "AntigravityExecutionError",
+    "ToolExecutionError",
     "StreamChunk",
     "Thought",
     "Text",
@@ -738,6 +739,20 @@ class AntigravityExecutionError(Exception):
   This indicates that the agent loop has terminated due to a fatal error
   (e.g. model call failure, system constraint violation) and cannot continue.
   """
+
+
+class ToolExecutionError(RuntimeError):
+  """Raised when a tool execution fails, carrying tool metadata."""
+
+  tool_name: str
+  server_name: str | None
+
+  def __init__(
+      self, message: str, tool_name: str, server_name: str | None = None
+  ):
+    super().__init__(message)
+    self.tool_name = tool_name
+    self.server_name = server_name
 
 
 class AntigravityValidationError(Exception):
