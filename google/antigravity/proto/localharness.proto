@@ -16,6 +16,8 @@ edition = "2024";
 
 package antigravity.localharness;
 
+import "google/antigravity/proto/content.proto";
+
 enum LifecycleHook {
   LIFECYCLE_HOOK_UNSPECIFIED = 0;
   LIFECYCLE_HOOK_ON_SESSION_START = 1;
@@ -30,9 +32,6 @@ enum ModelType {
   MODEL_TYPE_UNSPECIFIED = 0;
   MODEL_TYPE_TEXT = 1;
   MODEL_TYPE_IMAGE = 2;
-}
-enum NullValue {
-  NULL_VALUE = 0;
 }
 message InputConfig {
   string storage_directory = 1;
@@ -459,32 +458,11 @@ message TrajectoryStateUpdate {
   .antigravity.localharness.TrajectoryStateUpdate.State state = 3;
   string error = 4;
 }
-message Struct {
-  repeated .antigravity.localharness.Field fields = 1;
-}
-message Field {
-  string name = 1;
-  .antigravity.localharness.Value value = 2;
-}
-message Value {
-  oneof kind {
-    .antigravity.localharness.NullValue null_value = 1;
-    double number_value = 2;
-    string string_value = 3;
-    bool bool_value = 4;
-    .antigravity.localharness.Struct struct_value = 5;
-    .antigravity.localharness.ListValue list_value = 6;
-    .antigravity.localharness.Media media = 7;
-  }
-}
-message ListValue {
-  repeated .antigravity.localharness.Value values = 1;
-}
 message ToolCall {
   string id = 1;
   string name = 2;
   string arguments_json = 3;
-  .antigravity.localharness.Struct arguments = 4;
+  .genai.Struct arguments = 4;
   extensions 1000 to 1999;
   extensions 2000 to max;
 }
@@ -492,7 +470,7 @@ message ToolResponse {
   string id = 1;
   string response_json = 2;
   repeated .antigravity.localharness.Media supplemental_media = 3;
-  .antigravity.localharness.Struct response = 4;
+  .genai.Struct response = 4;
   string error_message = 5;
   extensions 1000 to 1999;
   extensions 2000 to max;
