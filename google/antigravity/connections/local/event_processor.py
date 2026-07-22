@@ -547,7 +547,10 @@ class LocalHarnessEventProcessor:
         if self.is_idle.is_set():
           self.is_idle.clear()
 
-      elif tsu.state == localharness_pb2.TrajectoryStateUpdate.State.STATE_IDLE:
+      elif (
+          tsu.state
+          == localharness_pb2.TrajectoryStateUpdate.State.STATE_FULLY_IDLE
+      ):
         if tsu.HasField("error"):
           await self.step_queue.put(
               types.AntigravityExecutionError(tsu.error)

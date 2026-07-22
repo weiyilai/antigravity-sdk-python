@@ -207,7 +207,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     event2 = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id=mock_trajectory_id,
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
             error="executor run failed: Resource exhausted",
         )
     )
@@ -250,7 +250,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     event2 = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="my_cascade",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
             error="Trajectory execution failed",
         )
     )
@@ -278,7 +278,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     event = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="my_cascade",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
             error="MCP load failed for dead_server: connection refused",
         )
     )
@@ -304,7 +304,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     event1 = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="my_cascade",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
         )
     )
     await harness.send_event(event1)
@@ -325,7 +325,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     event3 = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="my_cascade",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
         )
     )
     await harness.send_event(event3)
@@ -897,7 +897,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
     event2 = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="my_cascade",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
         )
     )
     await harness.send_event(event2)
@@ -989,7 +989,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         localharness_pb2.OutputEvent(
             trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
                 trajectory_id="parent_traj",
-                state=localharness_pb2.TrajectoryStateUpdate.State.STATE_IDLE,
+                state=localharness_pb2.TrajectoryStateUpdate.State.STATE_FULLY_IDLE,
             )
         )
     )
@@ -1034,7 +1034,7 @@ class LocalConnectionTest(unittest.IsolatedAsyncioTestCase):
         localharness_pb2.OutputEvent(
             trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
                 trajectory_id="traj_1",
-                state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+                state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
             )
         )
     )
@@ -2428,7 +2428,7 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
     idle_event = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="test_traj",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
         )
     )
     await harness.send_event(idle_event)
@@ -2494,7 +2494,7 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
     idle_event = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="test_traj",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
         )
     )
 
@@ -2571,7 +2571,7 @@ class LocalConnectionPostTurnHookTest(unittest.IsolatedAsyncioTestCase):
     idle_event = localharness_pb2.OutputEvent(
         trajectory_state_update=localharness_pb2.TrajectoryStateUpdate(
             trajectory_id="test_traj",
-            state=localharness_pb2.TrajectoryStateUpdate.STATE_IDLE,
+            state=localharness_pb2.TrajectoryStateUpdate.STATE_FULLY_IDLE,
         )
     )
 
